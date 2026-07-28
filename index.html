@@ -1918,5 +1918,71 @@ function eliminarMaterial(idx) {
   });
 }
 </script>
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   MODIFICADO · Persistencia de página (deep-linking con hash)
+   Antes: al recargar (F5) siempre volvías al Dashboard.
+   Ahora: la página vive en la URL (#miembros, #pagos, …), el refresh
+   te deja donde estabas y los botones atrás/adelante funcionan.
+   ═══════════════════════════════════════════════════════════════════ */
+(function(){
+  // detalle-curso-admin se excluye: necesita el contexto del curso abierto
+  var PAGINAS_VALIDAS = ['dashboard','miembros','pendientes','pagos','cursos-admin','sesiones-admin','pdfs-admin','avisos-admin','config-admin','stats'];
+
+  function paginaDesdeHash(){
+    var h = (window.location.hash || '').replace(/^#\/?/, '').trim();
+    return PAGINAS_VALIDAS.indexOf(h) !== -1 ? h : null;
+  }
+  function elementoSidebar(id){
+    return document.querySelector('.sidebar-item[onclick*="\'' + id + '\'"]');
+  }
+
+  var showPageOriginal = window.showPage;
+  var restaurando = false;
+  var usuarioNavego = false;
+
+  window.showPage = function(id, el){
+    var r = showPageOriginal.apply(this, arguments);
+    if (PAGINAS_VALIDAS.indexOf(id) !== -1 && !restaurando) {
+      usuarioNavego = true;
+      var nuevoHash = '#' + id;
+      if (window.location.hash !== nuevoHash) {
+        try { history.pushState({page:id}, '', nuevoHash); }
+        catch(e){ window.location.hash = id; }
+      }
+      try { sessionStorage.setItem('bnvadmin_pagina', id); } catch(e){}
+    }
+    return r;
+  };
+
+  function irSilencioso(id){
+    restaurando = true;
+    try { window.showPage(id, elementoSidebar(id)); }
+    catch(e){ console.warn('[BioNova admin] restaurar página:', e.message); }
+    restaurando = false;
+  }
+
+  function restaurar(){
+    if (usuarioNavego) return; // el admin ya navegó por su cuenta, no pisarlo
+    var destino = paginaDesdeHash();
+    if (!destino) {
+      try {
+        var guardada = sessionStorage.getItem('bnvadmin_pagina');
+        if (guardada && PAGINAS_VALIDAS.indexOf(guardada) !== -1) destino = guardada;
+      } catch(e){}
+    }
+    if (!destino || destino === 'dashboard') return;
+    irSilencioso(destino);
+    try { history.replaceState({page:destino}, '', '#' + destino); } catch(e){}
+  }
+
+  window.addEventListener('popstate', function(){
+    irSilencioso(paginaDesdeHash() || 'dashboard');
+  });
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', restaurar);
+  else restaurar();
+})();
+</script>
 </body>
 </html>
